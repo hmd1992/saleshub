@@ -6,7 +6,8 @@ from django.views.generic import TemplateView
 from django.db import models
 from apps.sales.models import Sale, SaleItem
 from apps.core.mixins import CashierOrAboveRequiredMixin
-
+from apps.expenses.models import Expense
+from decimal import Decimal
 class DashboardView(LoginRequiredMixin,CashierOrAboveRequiredMixin, TemplateView):
     template_name = "core/dashboard.html"
 
@@ -46,6 +47,12 @@ class DashboardView(LoginRequiredMixin,CashierOrAboveRequiredMixin, TemplateView
 
         total_sales = sales_today.aggregate(total=Sum("total_amount"))["total"] or 0
         total_profit = sales_today.aggregate(total=Sum("total_profit"))["total"] or 0
+        total_expenses = Expense.objects.filter(
+                merchant=merchant
+            ).aggregate(
+                total=Sum("amount_usd")
+            )["total"] or 0
+        net_profit = total_profit - total_expenses
         total_invoices = sales_today.count()
 
         total_debt = Sale.objects.filter(
@@ -62,7 +69,19 @@ class DashboardView(LoginRequiredMixin,CashierOrAboveRequiredMixin, TemplateView
             .annotate(total_qty=Sum("quantity"))
             .order_by("-total_qty")[:5]
         )
+        all_sales_profit = Sale.objects.filter(
+            merchant=merchant
+        ).aggregate(
+            total=Sum("total_profit")
+        )["total"] or Decimal("0")
 
+        all_expenses = Expense.objects.filter(
+            merchant=merchant
+        ).aggregate(
+            total=Sum("amount_usd")
+        )["total"] or Decimal("0")
+
+        net_profit_all = all_sales_profit - all_expenses
         context.update({
             "total_sales": total_sales,
             "total_profit": total_profit,
@@ -71,6 +90,11 @@ class DashboardView(LoginRequiredMixin,CashierOrAboveRequiredMixin, TemplateView
             "top_products": top_products,
             "low_stock_count": low_stock_count,
             "out_of_stock_count": out_of_stock_count,
+            "total_expenses": total_expenses,
+            "net_profit": net_profit,
+            "all_sales_profit": all_sales_profit,
+            "all_expenses": all_expenses,
+            "net_profit_all": net_profit_all,
         })
 
         return context

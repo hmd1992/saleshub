@@ -20,6 +20,7 @@ urlpatterns = [
     path("inventory/", include("apps.inventory.urls")),
     path("api/", include("apps.api.urls")),
     path("service-worker.js", ServiceWorkerView.as_view(), name="service_worker"),
+    path("expenses/", include("apps.expenses.urls")),
 ]
 
 urlpatterns += [

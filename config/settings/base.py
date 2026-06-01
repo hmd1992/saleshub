@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "apps.currencies",
     "apps.reports",
     "apps.api",
+    "apps.expenses",
 ]
 
 MIDDLEWARE = [

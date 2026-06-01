@@ -15,6 +15,7 @@ from .views import (
     SalePrintView,
     SyncStatusView,
     OfflinePOSShellView,
+    SaleEditView
 )
 
 app_name = "sales"
@@ -35,4 +36,5 @@ urlpatterns = [
     path("<int:pk>/print/", SalePrintView.as_view(), name="print"),
     path("sync-status/", SyncStatusView.as_view(), name="sync_status"),
     path("pos-offline-shell/", OfflinePOSShellView.as_view(), name="pos_offline_shell"),
+    path("<int:pk>/edit/", SaleEditView.as_view(), name="edit"),
 ]

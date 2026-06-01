@@ -1,5 +1,13 @@
 from decimal import Decimal
+from django import forms
+from django.forms import modelformset_factory
+from django.db import transaction
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.views.generic import UpdateView
 
+from apps.inventory.models import InventoryTransaction
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
@@ -40,7 +48,17 @@ from apps.core.mixins import (
     ManagerOrOwnerRequiredMixin,
     OwnerRequiredMixin,
 )
+class SaleItemEditForm(forms.ModelForm):
+    class Meta:
+        model = SaleItem
+        fields = ["quantity"]
 
+        widgets = {
+            "quantity": forms.NumberInput(attrs={
+                "class": "form-control",
+                "min": 1,
+            })
+        }
 
 class POSView(LoginRequiredMixin, MerchantRequiredMixin, TemplateView):
     template_name = "sales/pos.html"
@@ -478,9 +496,119 @@ class SalePrintView(LoginRequiredMixin, MerchantRequiredMixin, DetailView):
         ).prefetch_related(
             "items__product", "payments"
         )
-    
+
+
+class SaleEditView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, DetailView):
+    model = Sale
+    template_name = "sales/edit.html"
+    context_object_name = "sale"
+
+    def get_queryset(self):
+        return Sale.objects.filter(
+            merchant=self.get_merchant()
+        ).prefetch_related("items__product", "payments")
+
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+
+        formset_class = modelformset_factory(
+            SaleItem,
+            form=SaleItemEditForm,
+            extra=0,
+            can_delete=False,
+        )
+
+        formset = formset_class(
+            queryset=self.object.items.select_related("product").all()
+        )
+
+        return self.render_to_response(
+            self.get_context_data(formset=formset)
+        )
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+
+        formset_class = modelformset_factory(
+            SaleItem,
+            form=SaleItemEditForm,
+            extra=0,
+            can_delete=False,
+        )
+
+        formset = formset_class(
+            request.POST,
+            queryset=self.object.items.select_related("product").all()
+        )
+
+        if not formset.is_valid():
+            return self.render_to_response(
+                self.get_context_data(formset=formset)
+            )
+
+        with transaction.atomic():
+            for form in formset:
+                sale_item = form.save(commit=False)
+                old_item = SaleItem.objects.select_for_update().get(pk=sale_item.pk)
+                product = old_item.product
+
+                old_qty = old_item.quantity
+                new_qty = sale_item.quantity
+
+                diff = new_qty - old_qty
+
+                if diff == 0:
+                    continue
+
+                product = type(product).objects.select_for_update().get(pk=product.pk)
+
+                if diff > 0:
+                    if product.stock_quantity < diff:
+                        form.add_error(
+                            "quantity",
+                            f"المخزون غير كافٍ. المتاح حاليًا: {product.stock_quantity}"
+                        )
+                        raise ValueError("Insufficient stock")
+
+                    product.stock_quantity -= diff
+
+                    InventoryTransaction.objects.create(
+                        merchant=self.object.merchant,
+                        product=product,
+                        transaction_type="sale",
+                        quantity=diff,
+                        reference_sale=self.object,
+                        note=f"تعديل فاتورة {self.object.invoice_number}: زيادة كمية البيع",
+                    )
+
+                else:
+                    returned_qty = abs(diff)
+                    product.stock_quantity += returned_qty
+
+                    InventoryTransaction.objects.create(
+                        merchant=self.object.merchant,
+                        product=product,
+                        transaction_type="adjustment_add",
+                        quantity=returned_qty,
+                        reference_sale=self.object,
+                        note=f"تعديل فاتورة {self.object.invoice_number}: تخفيض كمية البيع",
+                    )
+
+                product.save(update_fields=["stock_quantity"])
+
+                old_item.quantity = new_qty
+                old_item.save()
+
+            self.object.recalculate_totals()
+            self.object.save()
+
+        messages.success(request, "تم تعديل الفاتورة وتحديث المخزون بنجاح.")
+        return redirect("sales:detail", pk=self.object.pk)
+
 class SyncStatusView(LoginRequiredMixin, CashierOrAboveRequiredMixin, TemplateView):
     template_name = "sales/sync_status.html"    
 
 class OfflinePOSShellView(LoginRequiredMixin, CashierOrAboveRequiredMixin, TemplateView):
     template_name = "sales/pos_offline_shell.html"
+
+

@@ -8,34 +8,44 @@ class MerchantRequiredMixin:
     def get_merchant(self):
         user = self.request.user
 
+        staff_profile = getattr(user, "staff_profile", None)
+        merchant = getattr(staff_profile, "merchant", None)
+
+        if merchant:
+            return merchant
+
         if user.is_superuser:
             return None
 
-        staff_profile = getattr(user, "staff_profile", None)
-        if not staff_profile or not staff_profile.merchant:
-            raise PermissionDenied("لا يوجد محل مرتبط بهذا المستخدم.")
+        raise PermissionDenied("لا يوجد محل مرتبط بهذا المستخدم.")
 
-        return staff_profile.merchant
+        
 
     def get_staff_profile(self):
         user = self.request.user
 
+        staff_profile = getattr(user, "staff_profile", None)
+
+        if staff_profile:
+            return staff_profile
+
         if user.is_superuser:
             return None
 
-        staff_profile = getattr(user, "staff_profile", None)
-        if not staff_profile:
-            raise PermissionDenied("لا يوجد ملف موظف مرتبط بهذا المستخدم.")
+        raise PermissionDenied("لا يوجد ملف موظف مرتبط بهذا المستخدم.")
 
-        return staff_profile
+        
 
     def get_role(self):
-        user = self.request.user
+        staff_profile = self.get_staff_profile()
 
-        if user.is_superuser:
+        if staff_profile:
+            return staff_profile.role
+
+        if self.request.user.is_superuser:
             return "owner"
 
-        return self.get_staff_profile().role
+        return None
 
 
 class OwnerRequiredMixin(MerchantRequiredMixin):

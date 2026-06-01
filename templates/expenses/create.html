@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}إضافة مصروف{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 fw-bold mb-1">إضافة مصروف</h1>
+        <p class="text-muted mb-0">تسجيل مصروف جديد على المتجر</p>
+    </div>
+
+    <a href="{% url 'expenses:list' %}" class="btn btn-outline-dark px-4">
+        العودة للمصروفات
+    </a>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4">
+    <div class="card-body p-4">
+        <form method="post" class="row g-3">
+            {% csrf_token %}
+
+            <div class="col-12 col-md-6">
+                <label class="form-label fw-semibold">العنوان</label>
+                {{ form.title }}
+                {% if form.title.errors %}
+                    <div class="text-danger small mt-1">{{ form.title.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="col-12 col-md-6">
+                <label class="form-label fw-semibold">الفئة</label>
+                {{ form.category }}
+                {% if form.category.errors %}
+                    <div class="text-danger small mt-1">{{ form.category.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold">المبلغ</label>
+                {{ form.amount }}
+                {% if form.amount.errors %}
+                    <div class="text-danger small mt-1">{{ form.amount.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold">العملة</label>
+                {{ form.currency }}
+                {% if form.currency.errors %}
+                    <div class="text-danger small mt-1">{{ form.currency.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold">سعر الصرف</label>
+                {{ form.exchange_rate }}
+                {% if form.exchange_rate.errors %}
+                    <div class="text-danger small mt-1">{{ form.exchange_rate.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="col-12 col-md-4">
+                <label class="form-label fw-semibold">تاريخ المصروف</label>
+                {{ form.expense_date }}
+                {% if form.expense_date.errors %}
+                    <div class="text-danger small mt-1">{{ form.expense_date.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="col-12">
+                <label class="form-label fw-semibold">ملاحظة</label>
+                {{ form.note }}
+                {% if form.note.errors %}
+                    <div class="text-danger small mt-1">{{ form.note.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-dark px-4">
+                    حفظ المصروف
+                </button>
+
+                <a href="{% url 'expenses:list' %}" class="btn btn-outline-secondary px-4">
+                    إلغاء
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

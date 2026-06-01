@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}تعديل الفاتورة {{ sale.invoice_number }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 fw-bold mb-1">تعديل الفاتورة</h1>
+        <p class="text-muted mb-0">فاتورة رقم: {{ sale.invoice_number }}</p>
+    </div>
+
+    <a href="{% url 'sales:detail' sale.pk %}" class="btn btn-outline-dark">
+        العودة للفاتورة
+    </a>
+</div>
+
+<div class="card shadow-sm border-0 rounded-4">
+    <div class="card-body p-4">
+        <form method="post">
+            {% csrf_token %}
+            {{ formset.management_form }}
+
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>المنتج</th>
+                            <th>سعر الوحدة</th>
+                            <th>التكلفة</th>
+                            <th style="width: 160px;">الكمية</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in formset %}
+                            <tr>
+                                <td>
+                                    {{ form.instance.product.name }}
+                                    {{ form.id }}
+                                </td>
+                                <td>${{ form.instance.unit_price }}</td>
+                                <td>${{ form.instance.unit_cost }}</td>
+                                <td>
+                                    {{ form.quantity }}
+                                    {% if form.quantity.errors %}
+                                        <div class="text-danger small mt-1">
+                                            {{ form.quantity.errors }}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if formset.non_form_errors %}
+                <div class="alert alert-danger">
+                    {{ formset.non_form_errors }}
+                </div>
+            {% endif %}
+
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-dark px-4">
+                    حفظ التعديل
+                </button>
+
+                <a href="{% url 'sales:detail' sale.pk %}" class="btn btn-outline-secondary px-4">
+                    إلغاء
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

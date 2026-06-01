@@ -73,6 +73,32 @@
         </div>
     </div>
 
+<div class="col-6 col-lg-4">
+    <div class="card shadow-sm border-0 h-100 rounded-4">
+        <div class="card-body text-center py-4">
+            <div class="text-muted small mb-2">إجمالي الأرباح</div>
+            <div class="h4 fw-bold text-success mb-0">${{ all_sales_profit }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="col-6 col-lg-4">
+    <div class="card shadow-sm border-0 h-100 rounded-4">
+        <div class="card-body text-center py-4">
+            <div class="text-muted small mb-2">إجمالي المصروفات</div>
+            <div class="h4 fw-bold text-danger mb-0">${{ all_expenses }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="col-6 col-lg-4">
+    <div class="card shadow-sm border-0 h-100 rounded-4">
+        <div class="card-body text-center py-4">
+            <div class="text-muted small mb-2">صافي الربح الإجمالي</div>
+            <div class="h4 fw-bold text-primary mb-0">${{ net_profit_all }}</div>
+        </div>
+    </div>
+</div>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4 mb-4">
@@ -140,6 +166,10 @@
                     تحديث بيانات الأوفلاين
                 </button>
             </div>
+            <a href="{% url 'expenses:list' %}"
+   class="btn btn-outline-dark py-3 rounded-3">
+    المصروفات
+</a>
         </div>
     </div>
 </div>
