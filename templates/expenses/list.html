@@ -6,38 +6,44 @@
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
         <h1 class="h3 fw-bold mb-1">المصروفات</h1>
-        <p class="text-muted mb-0">إدارة مصروفات المتجر ومتابعة الأثر على الربح</p>
+        <p class="text-muted mb-0">إدارة مصروفات المتجر ومتابعة أثرها على صافي الربح</p>
     </div>
 
-    <a href="{% url 'expenses:create' %}" class="btn btn-dark px-4">
-        إضافة مصروف
-    </a>
-    <a href="{% url 'expenses:report' %}" class="btn btn-outline-dark px-4">
-    تقرير المصروفات
-</a>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'expenses:create' %}" class="btn btn-dark rounded-3 px-4">
+            إضافة مصروف
+        </a>
+
+        <a href="{% url 'expenses:report' %}" class="btn btn-outline-dark rounded-3 px-4">
+            تقرير المصروفات
+        </a>
+    </div>
 </div>
+
 <div class="row g-3 mb-4">
-    <div class="col-6 col-md-4">
+    <div class="col-12 col-md-6">
         <div class="card shadow-sm border-0 rounded-4 h-100">
             <div class="card-body text-center py-4">
                 <div class="text-muted small mb-2">إجمالي المصروفات</div>
-                <div class="h5 fw-bold text-danger mb-0">${{ total_expenses }}</div>
+                <div class="h4 fw-bold text-danger mb-0">${{ total_expenses|floatformat:2 }}</div>
             </div>
         </div>
     </div>
 
-    <div class="col-6 col-md-4">
+    <div class="col-12 col-md-6">
         <div class="card shadow-sm border-0 rounded-4 h-100">
             <div class="card-body text-center py-4">
                 <div class="text-muted small mb-2">عدد المصروفات</div>
-                <div class="h5 fw-bold mb-0">{{ expenses_count }}</div>
+                <div class="h4 fw-bold mb-0">{{ expenses_count }}</div>
             </div>
         </div>
     </div>
 </div>
+
 <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
     <div class="card-header bg-white border-bottom py-3 px-4">
         <div class="fw-bold">سجل المصروفات</div>
+        <div class="text-muted small">آخر المصروفات المسجلة على المتجر</div>
     </div>
 
     <div class="card-body p-0">
@@ -52,17 +58,32 @@
                             <th class="py-3">المبلغ</th>
                             <th class="py-3">العملة</th>
                             <th class="py-3">بالدولار</th>
-                            <th class="px-4 py-3">ملاحظة</th>
-                            <th class="px-4 py-3">إجراءات</th>
+                            <th class="py-3">ملاحظة</th>
+                            <th class="px-4 py-3 text-center">إجراءات</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         {% for expense in expenses %}
                             <tr>
-                                <td class="px-4">{{ expense.expense_date|date:"Y-m-d" }}</td>
-                                <td class="fw-semibold">{{ expense.title }}</td>
-                                <td>{{ expense.get_category_display }}</td>
-                                <td>{{ expense.amount }}</td>
+                                <td class="px-4 text-muted">
+                                    {{ expense.expense_date|date:"Y-m-d" }}
+                                </td>
+
+                                <td class="fw-semibold">
+                                    {{ expense.title }}
+                                </td>
+
+                                <td>
+                                    <span class="badge text-bg-light border">
+                                        {{ expense.get_category_display }}
+                                    </span>
+                                </td>
+
+                                <td>
+                                    {{ expense.amount|floatformat:2 }}
+                                </td>
+
                                 <td>
                                     {% if expense.currency %}
                                         {{ expense.currency.code }}
@@ -70,27 +91,41 @@
                                         -
                                     {% endif %}
                                 </td>
-                                <td class="fw-bold text-danger">${{ expense.amount_usd }}</td>
-                                <td class="px-4">{{ expense.note|default:"-" }}</td>
-                                <td class="px-4">
-    <div class="d-flex gap-2">
-        <a href="{% url 'expenses:edit' expense.pk %}" class="btn btn-sm btn-outline-dark">
-            تعديل
-        </a>
 
-        <a href="{% url 'expenses:delete' expense.pk %}" class="btn btn-sm btn-outline-danger">
-            حذف
-        </a>
-    </div>
-</td>
+                                <td class="fw-bold text-danger">
+                                    ${{ expense.amount_usd|floatformat:2 }}
+                                </td>
+
+                                <td class="text-muted">
+                                    {{ expense.note|default:"-"|truncatechars:40 }}
+                                </td>
+
+                                <td class="px-4">
+                                    <div class="d-flex justify-content-center gap-2">
+                                        <a href="{% url 'expenses:edit' expense.pk %}"
+                                           class="btn btn-sm btn-outline-dark rounded-3">
+                                            تعديل
+                                        </a>
+
+                                        <a href="{% url 'expenses:delete' expense.pk %}"
+                                           class="btn btn-sm btn-outline-danger rounded-3">
+                                            حذف
+                                        </a>
+                                    </div>
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         {% else %}
-            <div class="p-5 text-center text-muted">
-                لا توجد مصروفات مسجلة حتى الآن
+            <div class="p-5 text-center">
+                <div class="fw-bold mb-2">لا توجد مصروفات مسجلة حتى الآن</div>
+                <div class="text-muted mb-3">ابدأ بإضافة أول مصروف للمتجر.</div>
+
+                <a href="{% url 'expenses:create' %}" class="btn btn-dark rounded-3 px-4">
+                    إضافة مصروف
+                </a>
             </div>
         {% endif %}
     </div>

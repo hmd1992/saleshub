@@ -59,6 +59,22 @@ class SaleItemEditForm(forms.ModelForm):
                 "min": 1,
             })
         }
+class SaleDiscountEditForm(forms.ModelForm):
+    class Meta:
+        model = Sale
+        fields = ["discount_amount"]
+
+        widgets = {
+            "discount_amount": forms.NumberInput(attrs={
+                "class": "form-control",
+                "min": 0,
+                "step": "0.01",
+            })
+        }
+
+        labels = {
+            "discount_amount": "قيمة الخصم",
+        }        
 
 class POSView(LoginRequiredMixin, MerchantRequiredMixin, TemplateView):
     template_name = "sales/pos.html"
@@ -428,7 +444,7 @@ class PaymentCreateView(LoginRequiredMixin, MerchantRequiredMixin, CreateView):
         form.instance.amount = amount_in_usd
 
         response = super().form_valid(form)
-
+        
         self.sale.recalculate_totals()
         self.sale.save()
 
@@ -515,15 +531,20 @@ class SaleEditView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, DetailView):
             SaleItem,
             form=SaleItemEditForm,
             extra=0,
-            can_delete=False,
+            can_delete=True
         )
 
         formset = formset_class(
             queryset=self.object.items.select_related("product").all()
         )
 
+        discount_form = SaleDiscountEditForm(instance=self.object)
+
         return self.render_to_response(
-            self.get_context_data(formset=formset)
+            self.get_context_data(
+                formset=formset,
+                discount_form=discount_form,
+            )
         )
 
     def post(self, request, *args, **kwargs):
@@ -533,7 +554,7 @@ class SaleEditView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, DetailView):
             SaleItem,
             form=SaleItemEditForm,
             extra=0,
-            can_delete=False,
+            can_delete=True,
         )
 
         formset = formset_class(
@@ -541,26 +562,71 @@ class SaleEditView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, DetailView):
             queryset=self.object.items.select_related("product").all()
         )
 
-        if not formset.is_valid():
-            return self.render_to_response(
-                self.get_context_data(formset=formset)
-            )
+        discount_form = SaleDiscountEditForm(
+            request.POST,
+            instance=self.object,
+        )
 
+        if not formset.is_valid() or not discount_form.is_valid():
+            return self.render_to_response(
+                self.get_context_data(
+                    formset=formset,
+                    discount_form=discount_form,
+                )
+            )
+        deleted_count = 0
+
+        for form in formset:
+            if form.cleaned_data and form.cleaned_data.get("DELETE"):
+                deleted_count += 1
+
+        current_items_count = self.object.items.count()
+
+        if deleted_count >= current_items_count:
+            formset._non_form_errors = formset.error_class([
+                "لا يمكن حذف جميع منتجات الفاتورة. يجب أن يبقى منتج واحد على الأقل."
+            ])
+
+            return self.render_to_response(
+                self.get_context_data(
+                    formset=formset,
+                    discount_form=discount_form,
+                )
+            )
         with transaction.atomic():
             for form in formset:
+                print(form.cleaned_data)
+                if not form.cleaned_data:
+                    continue
+
                 sale_item = form.save(commit=False)
                 old_item = SaleItem.objects.select_for_update().get(pk=sale_item.pk)
                 product = old_item.product
+                product = type(product).objects.select_for_update().get(pk=product.pk)
 
                 old_qty = old_item.quantity
-                new_qty = sale_item.quantity
 
+                if form.cleaned_data.get("DELETE"):
+                    product.stock_quantity += old_qty
+                    product.save(update_fields=["stock_quantity"])
+
+                    InventoryTransaction.objects.create(
+                        merchant=self.object.merchant,
+                        product=product,
+                        transaction_type="adjustment_add",
+                        quantity=old_qty,
+                        reference_sale=self.object,
+                        note=f"تعديل فاتورة {self.object.invoice_number}: حذف المنتج من الفاتورة",
+                    )
+
+                    old_item.delete()
+                    continue
+
+                new_qty = sale_item.quantity
                 diff = new_qty - old_qty
 
                 if diff == 0:
                     continue
-
-                product = type(product).objects.select_for_update().get(pk=product.pk)
 
                 if diff > 0:
                     if product.stock_quantity < diff:
@@ -568,7 +634,13 @@ class SaleEditView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, DetailView):
                             "quantity",
                             f"المخزون غير كافٍ. المتاح حاليًا: {product.stock_quantity}"
                         )
-                        raise ValueError("Insufficient stock")
+
+                        return self.render_to_response(
+                            self.get_context_data(
+                                formset=formset,
+                                discount_form=discount_form,
+                            )
+                        )
 
                     product.stock_quantity -= diff
 
@@ -598,6 +670,9 @@ class SaleEditView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, DetailView):
 
                 old_item.quantity = new_qty
                 old_item.save()
+
+            discount_form.save()
+            self.object.refresh_from_db()
 
             self.object.recalculate_totals()
             self.object.save()

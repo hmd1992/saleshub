@@ -4,13 +4,21 @@
 
 {% block content %}
 
-<div class="d-grid mb-4">
-    <a href="{% url 'sales:print' sale.pk %}" class="btn btn-outline-dark rounded-3 py-3">
-        طباعة / حفظ PDF
+<div class="d-flex flex-wrap gap-2 mb-4">
+    <a href="{% url 'sales:print' sale.pk %}"
+       class="btn btn-dark rounded-3 px-4">
+        طباعة / PDF
     </a>
-    <a href="{% url 'sales:edit' sale.pk %}" class="btn btn-outline-dark">
-    تعديل الفاتورة
-</a>
+
+    <a href="{% url 'sales:edit' sale.pk %}"
+       class="btn btn-outline-dark rounded-3 px-4">
+        تعديل الفاتورة
+    </a>
+
+    <a href="{% url 'sales:list' %}"
+       class="btn btn-outline-secondary rounded-3 px-4">
+        العودة للمبيعات
+    </a>
 </div>
 
 <div class="card shadow-sm border-0 rounded-4 mb-4">
@@ -19,8 +27,20 @@
             <div>
                 <h1 class="h3 fw-bold mb-1">{{ sale.invoice_number }}</h1>
                 <p class="text-muted mb-0">ملخص الفاتورة وحالة السداد والبيانات المالية</p>
+                <div class="mt-2">
+    {% if sale.payment_status == "paid" %}
+        <span class="badge text-bg-success">مسددة</span>
+    {% elif sale.payment_status == "partial" %}
+        <span class="badge text-bg-warning">مدفوعة جزئياً</span>
+    {% else %}
+        <span class="badge text-bg-danger">غير مسددة</span>
+    {% endif %}
+</div>
             </div>
+            
         </div>
+
+        
 
         <div class="row g-3 mb-4">
             <div class="col-12 col-lg-6">
@@ -97,11 +117,19 @@
                     <div class="d-flex justify-content-between align-items-start gap-3">
                         <div>
                             <div class="fw-bold mb-1">{{ item.product.name }}</div>
-                            <div class="small text-muted">
-                                الكمية: {{ item.quantity }} |
-                                سعر الوحدة: ${{ item.unit_price }} |
-                                الإجمالي: ${{ item.line_total }}
-                            </div>
+                          <div class="row text-muted small mt-1">
+    <div class="col-auto">
+        الكمية: <strong>{{ item.quantity }}</strong>
+    </div>
+
+    <div class="col-auto">
+        الوحدة: <strong>${{ item.unit_price }}</strong>
+    </div>
+
+    <div class="col-auto">
+        الإجمالي: <strong>${{ item.line_total }}</strong>
+    </div>
+</div>
                         </div>
                     </div>
                 </div>

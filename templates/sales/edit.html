@@ -6,69 +6,128 @@
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
         <h1 class="h3 fw-bold mb-1">تعديل الفاتورة</h1>
-        <p class="text-muted mb-0">فاتورة رقم: {{ sale.invoice_number }}</p>
+        <p class="text-muted mb-0">
+            تعديل كميات المنتجات والخصم للفاتورة رقم:
+            <span class="fw-semibold text-dark">{{ sale.invoice_number }}</span>
+        </p>
     </div>
 
-    <a href="{% url 'sales:detail' sale.pk %}" class="btn btn-outline-dark">
+    <a href="{% url 'sales:detail' sale.pk %}" class="btn btn-outline-dark rounded-3 px-4">
         العودة للفاتورة
     </a>
 </div>
 
-<div class="card shadow-sm border-0 rounded-4">
-    <div class="card-body p-4">
-        <form method="post">
-            {% csrf_token %}
-            {{ formset.management_form }}
+<div class="alert alert-warning border-0 rounded-4 shadow-sm mb-4">
+    <div class="fw-bold mb-1">تنبيه مهم</div>
+    <div class="small mb-0">
+        أي تعديل على الكميات سيؤثر مباشرة على المخزون وقيمة الفاتورة والربح.
+        لا يمكن حذف جميع منتجات الفاتورة.
+    </div>
+</div>
 
+<form method="post">
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <div class="fw-bold fs-5">بيانات الخصم</div>
+            <div class="text-muted small">
+                يمكنك تعديل قيمة الخصم على الفاتورة قبل الحفظ.
+            </div>
+        </div>
+
+        <div class="card-body px-4 pb-4">
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <label class="form-label fw-semibold">قيمة الخصم</label>
+                    {{ discount_form.discount_amount }}
+
+                    {% if discount_form.discount_amount.errors %}
+                        <div class="text-danger small mt-1">
+                            {{ discount_form.discount_amount.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if formset.non_form_errors %}
+        <div class="alert alert-danger rounded-4">
+            {{ formset.non_form_errors }}
+        </div>
+    {% endif %}
+
+    <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-header bg-white border-0 pt-4 pb-2 px-4">
+            <div class="fw-bold fs-5">منتجات الفاتورة</div>
+            <div class="text-muted small">
+                عدّل الكمية أو ضع إشارة حذف لإزالة منتج من الفاتورة.
+            </div>
+        </div>
+
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table align-middle">
+                <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>المنتج</th>
-                            <th>سعر الوحدة</th>
-                            <th>التكلفة</th>
-                            <th style="width: 160px;">الكمية</th>
+                            <th class="px-4 py-3">المنتج</th>
+                            <th class="py-3">سعر الوحدة</th>
+                            <th class="py-3">التكلفة</th>
+                            <th class="py-3" style="width: 160px;">الكمية</th>
+                            <th class="py-3 text-center" style="width: 120px;">حذف</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         {% for form in formset %}
                             <tr>
-                                <td>
+                                <td class="px-4 fw-semibold">
                                     {{ form.instance.product.name }}
                                     {{ form.id }}
                                 </td>
+
                                 <td>${{ form.instance.unit_price }}</td>
+
                                 <td>${{ form.instance.unit_cost }}</td>
+
                                 <td>
                                     {{ form.quantity }}
+
                                     {% if form.quantity.errors %}
                                         <div class="text-danger small mt-1">
                                             {{ form.quantity.errors }}
                                         </div>
                                     {% endif %}
                                 </td>
+
+                                <td class="text-center">
+                                    <div class="form-check d-flex justify-content-center gap-2">
+                                        {{ form.DELETE }}
+                                        <label class="form-check-label text-danger small">
+                                            حذف
+                                        </label>
+                                    </div>
+                                </td>
                             </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+        </div>
 
-            {% if formset.non_form_errors %}
-                <div class="alert alert-danger">
-                    {{ formset.non_form_errors }}
-                </div>
-            {% endif %}
-
-            <div class="d-flex gap-2 mt-3">
-                <button type="submit" class="btn btn-dark px-4">
-                    حفظ التعديل
-                </button>
-
-                <a href="{% url 'sales:detail' sale.pk %}" class="btn btn-outline-secondary px-4">
+        <div class="card-footer bg-white border-0 p-4">
+            <div class="d-flex flex-column flex-md-row gap-2 justify-content-end">
+                <a href="{% url 'sales:detail' sale.pk %}" class="btn btn-outline-secondary px-4 rounded-3">
                     إلغاء
                 </a>
+
+                <button type="submit" class="btn btn-dark px-4 rounded-3">
+                    حفظ التعديل
+                </button>
             </div>
-        </form>
+        </div>
     </div>
-</div>
+</form>
 {% endblock %}
