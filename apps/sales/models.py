@@ -127,13 +127,36 @@ class Sale(TimeStampedModel):
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
 
-        paid = self.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0")
-        self.amount_paid = Decimal(paid).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        self.amount_due = (self.total_amount - self.amount_paid).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        )
+        if self.payment_type == "cash":
+            # الفاتورة النقدية تعتبر مسددة بالكامل دائمًا.
+            self.amount_paid = self.total_amount
+            self.amount_due = Decimal("0.00")
+            self.payment_status = "paid"
 
-        self.refresh_payment_status()
+        else:
+            # فواتير الدين تعتمد على الدفعات المسجلة.
+            paid = (
+                self.payments.aggregate(total=Sum("amount"))["total"]
+                or Decimal("0")
+            )
+
+            self.amount_paid = Decimal(paid).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+
+            self.amount_due = (
+                self.total_amount - self.amount_paid
+            ).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP
+            )
+
+            # منع ظهور مبلغ مستحق سالب.
+            if self.amount_due < Decimal("0.00"):
+                self.amount_due = Decimal("0.00")
+
+            self.refresh_payment_status()
 
         if self.exchange_rate and self.payment_currency and self.pricing_currency:
             self.total_amount_payment_currency = (
