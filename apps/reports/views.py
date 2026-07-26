@@ -1,8 +1,18 @@
 from decimal import Decimal
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Sum, Count, Avg, Q
+
 from django.views.generic import TemplateView
-from django.db.models import F
+from django.db.models import (
+    Sum,
+    Count,
+    Avg,
+    Q,
+    F,
+    Value,
+    DecimalField,
+    ExpressionWrapper,
+)
+from django.db.models.functions import Coalesce
 from apps.products.models import Product
 from apps.sales.models import SaleItem
 from apps.core.mixins import MerchantRequiredMixin
@@ -204,7 +214,11 @@ class SalesReportExportExcelView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response    
     
-class ProductReportView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, TemplateView):
+class ProductReportView(
+    LoginRequiredMixin,
+    ManagerOrOwnerRequiredMixin,
+    TemplateView
+):
     template_name = "reports/product_report.html"
 
     def get_context_data(self, **kwargs):
@@ -215,36 +229,93 @@ class ProductReportView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, Templat
         date_to = self.request.GET.get("date_to", "").strip()
         sort_by = self.request.GET.get("sort_by", "qty").strip()
 
-        products = Product.objects.filter(
-            merchant=merchant,
-            is_active=True
-        ).order_by("name")
+        money_field = DecimalField(
+            max_digits=18,
+            decimal_places=2
+        )
+
+        # شروط الفترة الزمنية لتجميع المبيعات
+        sales_filter = Q(
+            sale_items__sale__merchant=merchant
+        )
+
+        if date_from:
+            sales_filter &= Q(
+                sale_items__sale__created_at__date__gte=date_from
+            )
+
+        if date_to:
+            sales_filter &= Q(
+                sale_items__sale__created_at__date__lte=date_to
+            )
+
+        total_cost_expression = ExpressionWrapper(
+            F("sale_items__unit_cost") *
+            F("sale_items__quantity"),
+            output_field=money_field,
+        )
+
+        products = (
+            Product.objects
+            .filter(
+                merchant=merchant,
+                is_active=True,
+            )
+            .annotate(
+                report_total_qty=Coalesce(
+                    Sum(
+                        "sale_items__quantity",
+                        filter=sales_filter,
+                    ),
+                    Value(0),
+                ),
+                report_total_sales=Coalesce(
+                    Sum(
+                        "sale_items__line_total",
+                        filter=sales_filter,
+                    ),
+                    Value(
+                        Decimal("0.00"),
+                        output_field=money_field,
+                    ),
+                    output_field=money_field,
+                ),
+                report_total_cost=Coalesce(
+                    Sum(
+                        total_cost_expression,
+                        filter=sales_filter,
+                    ),
+                    Value(
+                        Decimal("0.00"),
+                        output_field=money_field,
+                    ),
+                    output_field=money_field,
+                ),
+            )
+        )
+
+        order_fields = {
+            "qty": "-report_total_qty",
+            "sales": "-report_total_sales",
+            "profit": "-report_total_profit",
+            "stock": "stock_quantity",
+        }
+
+        # الربح المحسوب داخل قاعدة البيانات
+        products = products.annotate(
+            report_total_profit=ExpressionWrapper(
+                F("report_total_sales") -
+                F("report_total_cost"),
+                output_field=money_field,
+            )
+        ).order_by(
+            order_fields.get(sort_by, "-report_total_qty"),
+            "name",
+        )
 
         stats_list = []
 
         for product in products:
-            sale_items = SaleItem.objects.filter(
-                sale__merchant=merchant,
-                product=product
-            )
-
-            if date_from:
-                sale_items = sale_items.filter(sale__created_at__date__gte=date_from)
-
-            if date_to:
-                sale_items = sale_items.filter(sale__created_at__date__lte=date_to)
-
-            totals = sale_items.aggregate(
-                total_qty=Sum("quantity"),
-                total_sales=Sum("line_total"),
-                total_cost=Sum(F("unit_cost") * F("quantity")),
-            )
-
-            total_qty = totals["total_qty"] or 0
-            total_sales = totals["total_sales"] or Decimal("0")
-            total_cost = totals["total_cost"] or Decimal("0")
-            total_profit = total_sales - total_cost
-
             stock_quantity = product.stock_quantity or 0
             reorder_level = product.reorder_level or 0
 
@@ -261,35 +332,50 @@ class ProductReportView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, Templat
                 "stock_quantity": stock_quantity,
                 "reorder_level": reorder_level,
                 "stock_status": stock_status,
-                "total_qty": total_qty,
-                "total_sales": total_sales,
-                "total_cost": total_cost,
-                "total_profit": total_profit,
+                "total_qty": product.report_total_qty or 0,
+                "total_sales": (
+                    product.report_total_sales
+                    or Decimal("0.00")
+                ),
+                "total_cost": (
+                    product.report_total_cost
+                    or Decimal("0.00")
+                ),
+                "total_profit": (
+                    product.report_total_profit
+                    or Decimal("0.00")
+                ),
             })
 
-        if sort_by == "profit":
-            stats_list.sort(key=lambda x: x["total_profit"], reverse=True)
-        elif sort_by == "sales":
-            stats_list.sort(key=lambda x: x["total_sales"], reverse=True)
-        elif sort_by == "stock":
-            stats_list.sort(key=lambda x: x["stock_quantity"])
-        else:
-            stats_list.sort(key=lambda x: x["total_qty"], reverse=True)
-
-        total_products = products.count()
-        low_stock_count = products.filter(
-            stock_quantity__gt=0,
-            stock_quantity__lte=F("reorder_level")
-        ).count()
-        out_of_stock_count = products.filter(
-            stock_quantity__lte=0
-        ).count()
+        inventory_summary = Product.objects.filter(
+            merchant=merchant,
+            is_active=True,
+        ).aggregate(
+            total_products=Count("id"),
+            low_stock_count=Count(
+                "id",
+                filter=Q(
+                    stock_quantity__gt=0,
+                    stock_quantity__lte=F("reorder_level"),
+                ),
+            ),
+            out_of_stock_count=Count(
+                "id",
+                filter=Q(stock_quantity__lte=0),
+            ),
+        )
 
         context.update({
             "stats": stats_list,
-            "total_products": total_products,
-            "low_stock_count": low_stock_count,
-            "out_of_stock_count": out_of_stock_count,
+            "total_products": (
+                inventory_summary["total_products"] or 0
+            ),
+            "low_stock_count": (
+                inventory_summary["low_stock_count"] or 0
+            ),
+            "out_of_stock_count": (
+                inventory_summary["out_of_stock_count"] or 0
+            ),
             "date_from": date_from,
             "date_to": date_to,
             "sort_by": sort_by,
