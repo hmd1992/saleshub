@@ -23,7 +23,17 @@ class Sale(TimeStampedModel):
         ("unpaid", "Unpaid"),
         ("partially_paid", "Partially Paid"),
     ]
+    SALE_STATUS_CHOICES = [
+        ("completed", "مكتملة"),
+        ("returned", "مرتجعة بالكامل"),
+    ]
 
+    sale_status = models.CharField(
+        max_length=20,
+        choices=SALE_STATUS_CHOICES,
+        default="completed",
+        db_index=True,
+    )
     pricing_currency = models.ForeignKey(
         "currencies.Currency",
         on_delete=models.PROTECT,

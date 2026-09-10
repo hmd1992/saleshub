@@ -679,6 +679,109 @@ class SaleEditView(LoginRequiredMixin, ManagerOrOwnerRequiredMixin, DetailView):
 
         messages.success(request, "تم تعديل الفاتورة وتحديث المخزون بنجاح.")
         return redirect("sales:detail", pk=self.object.pk)
+class SaleFullReturnView(
+    LoginRequiredMixin,
+    ManagerOrOwnerRequiredMixin,
+    View
+):
+    def post(self, request, pk):
+        merchant = self.get_merchant()
+
+        with transaction.atomic():
+
+            sale = get_object_or_404(
+                Sale.objects.select_for_update(),
+                pk=pk,
+                merchant=merchant,
+            )
+
+            # منع إرجاع نفس الفاتورة مرتين
+            if sale.sale_status == "returned":
+                messages.warning(
+                    request,
+                    "هذه الفاتورة مرتجعة بالكامل مسبقًا."
+                )
+                return redirect("sales:detail", pk=sale.pk)
+
+            items = list(
+                sale.items
+                .select_related("product")
+                .select_for_update()
+            )
+
+            if not items:
+                messages.error(
+                    request,
+                    "لا تحتوي الفاتورة على أصناف قابلة للإرجاع."
+                )
+                return redirect("sales:detail", pk=sale.pk)
+
+            # حفظ القيمة الأصلية قبل تصفير الفاتورة
+            original_total = sale.total_amount
+            original_paid = sale.amount_paid
+
+            # إعادة جميع الأصناف إلى المخزون
+            for item in items:
+                product = Product.objects.select_for_update().get(
+                    pk=item.product_id,
+                    merchant=merchant,
+                )
+
+                product.stock_quantity += item.quantity
+                product.save(update_fields=["stock_quantity"])
+
+                InventoryTransaction.objects.create(
+                    merchant=merchant,
+                    product=product,
+                    transaction_type="adjustment_add",
+                    quantity=item.quantity,
+                    reference_sale=sale,
+                    note=(
+                        f"إرجاع كامل للفاتورة "
+                        f"{sale.invoice_number}"
+                    ),
+                )
+
+            # حذف عناصر الفاتورة بعد إعادة المخزون
+            sale.items.all().delete()
+
+            # تصفير القيم المالية
+            sale.discount_amount = Decimal("0.00")
+            sale.subtotal = Decimal("0.00")
+            sale.total_amount = Decimal("0.00")
+            sale.total_cost = Decimal("0.00")
+            sale.total_profit = Decimal("0.00")
+            sale.total_amount_payment_currency = Decimal("0.00")
+
+            sale.amount_paid = Decimal("0.00")
+            sale.amount_due = Decimal("0.00")
+
+            sale.sale_status = "returned"
+
+            # نحتفظ بحالة الدفع تاريخيًا كمدفوعة
+            # ولا نستخدمها للدلالة على الإرجاع
+            sale.payment_status = "paid"
+
+            return_note = (
+                f"تم إرجاع الفاتورة بالكامل. "
+                f"القيمة الأصلية: ${original_total}. "
+                f"المبلغ المدفوع قبل الإرجاع: ${original_paid}."
+            )
+
+            if sale.notes:
+                sale.notes = f"{sale.notes}\n{return_note}"
+            else:
+                sale.notes = return_note
+
+            sale.save()
+
+        messages.success(
+            request,
+            f"تم إرجاع الفاتورة {sale.invoice_number} بالكامل وإعادة الأصناف إلى المخزون."
+        )
+
+        return redirect("sales:detail", pk=sale.pk)
+
 
 class SyncStatusView(LoginRequiredMixin, CashierOrAboveRequiredMixin, TemplateView):
     template_name = "sales/sync_status.html"    
